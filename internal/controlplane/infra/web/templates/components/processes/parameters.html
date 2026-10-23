@@ -1,0 +1,8 @@
+{{define "processes/parameters"}}
+{{if .}}<dl class="execution-parameters">
+    {{range .}}<div class="execution-parameter">
+        <dt><code>{{.Name}}</code><span class="parameter-type">{{.Type}}</span><button type="button" class="text-button copy-value" data-copy-value aria-label="Copy {{.Name}} value" hidden>Copy value</button><span class="copy-feedback" data-copy-status role="status"></span></dt>
+        <dd>{{if .Summary}}<p class="execution-summary">{{.Summary}}</p><details class="execution-json"><summary>View JSON</summary><pre>{{.Value}}</pre></details>{{else}}<pre>{{.Value}}</pre>{{end}}</dd>
+    </div>{{end}}
+</dl>{{else}}<p class="panel-message">No values.</p>{{end}}
+{{end}}

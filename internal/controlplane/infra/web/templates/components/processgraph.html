@@ -1,0 +1,79 @@
+{{define "processgraph"}}
+<section class="panel process-graph-panel" aria-labelledby="graph-title" data-process-graph>
+    <div class="panel-heading"><h2 id="graph-title">Workflow</h2></div>
+    <div class="process-graph-legend" aria-label="{{if .Execution}}Step states{{else}}Step types{{end}}">
+        {{if .Execution}}
+        <span><i class="graph-key graph-key-current" aria-hidden="true"></i>Current</span>
+        <span><i class="graph-key graph-key-completed" aria-hidden="true"></i>Completed</span>
+        <span><i class="graph-key graph-key-failed" aria-hidden="true"></i>Failed</span>
+        {{else}}
+        <span><i class="graph-key graph-key-codex" aria-hidden="true"></i>AI coding task</span>
+        <span><i class="graph-key graph-key-end" aria-hidden="true"></i>End event</span>
+        {{end}}
+    </div>
+    {{if .Nodes}}
+        <pre data-graph-source hidden>{{.Diagram}}</pre>
+        <div class="process-graph-canvas" data-graph-canvas tabindex="0" role="region" aria-label="Process steps and directed connections"></div>
+        <div data-graph-nodes hidden>{{range $index, $node := .Nodes}}<span data-node-class="step-node-{{$index}}" data-step-id="{{$node.ID}}" data-step-name="{{$node.Name}}"{{if $.Execution}} data-inspect-step{{end}}></span>{{end}}</div>
+        <p data-graph-status role="status" class="panel-message"><span data-graph-message>Step details and connections are available below.</span> <a class="text-link" data-graph-steps-link href="{{if .Execution}}#step-details-index{{else}}#steps-title{{end}}">Browse steps</a></p>
+    {{else}}
+        <p class="panel-message">No steps available.</p>
+    {{end}}
+    {{if and .Execution (not .DefinitionAvailable)}}
+        <p class="graph-context">The definition is unavailable. Showing recorded steps.</p>
+    {{end}}
+</section>
+{{if .Nodes}}
+<script type="module">
+    const graphs = document.querySelectorAll('[data-process-graph]');
+    for (const graph of graphs) {
+        const message = graph.querySelector('[data-graph-message]');
+        if (message) message.textContent = 'Loading graph…';
+    }
+    try {
+        const {default: mermaid} = await import('https://cdn.jsdelivr.net/npm/mermaid@11.12.0/dist/mermaid.esm.min.mjs');
+        const theme = getComputedStyle(document.documentElement);
+        const color = name => theme.getPropertyValue(name).trim();
+        await document.fonts.ready;
+        mermaid.initialize({
+            startOnLoad: false, securityLevel: 'strict', theme: 'base',
+            themeCSS: `
+                .node text .text-inner-tspan { font-size: 13px; font-weight: 600; }
+            `,
+            flowchart: {htmlLabels: false, useMaxWidth: false, curve: 'basis', nodeSpacing: 48, rankSpacing: 54, padding: 18},
+            themeVariables: {fontFamily: color('--font-mono'), fontSize: '12px', primaryColor: color('--raised'), primaryBorderColor: color('--border-strong'), primaryTextColor: color('--text'), lineColor: color('--subtle'), darkMode: true}
+        });
+        for (const [index, graph] of [...graphs].entries()) {
+            const canvas = graph.querySelector('[data-graph-canvas]');
+            if (!canvas) continue;
+            const {svg} = await mermaid.render('process-graph-svg-' + index, graph.querySelector('[data-graph-source]').textContent);
+            canvas.innerHTML = svg;
+            canvas.querySelector('svg').setAttribute('role', 'group');
+            for (const item of graph.querySelectorAll('[data-inspect-step]')) {
+                const node = canvas.querySelector('.node.' + item.dataset.nodeClass);
+                if (!node) continue;
+                node.setAttribute('role', 'button');
+                node.setAttribute('tabindex', '0');
+                node.setAttribute('aria-label', 'Inspect step ' + item.dataset.stepName);
+                node.setAttribute('aria-haspopup', 'dialog');
+                node.classList.add('step-node-interactive');
+                const inspect = () => graph.dispatchEvent(new CustomEvent('processgraph:select', {bubbles: true, detail: {id: item.dataset.stepId, trigger: node}}));
+                node.addEventListener('click', inspect);
+                node.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        inspect();
+                    }
+                });
+            }
+            graph.querySelector('[data-graph-status]').hidden = true;
+        }
+    } catch (error) {
+        for (const graph of graphs) {
+            const message = graph.querySelector('[data-graph-message]');
+            if (message) message.textContent = 'Graph unavailable. Step details and connections are still available.';
+        }
+    }
+</script>
+{{end}}
+{{end}}

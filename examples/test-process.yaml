@@ -1,0 +1,48 @@
+name: Test process execution with Codex
+description: Ask Codex to inspect a repository and return a summary.
+
+inputs:
+  working_directory:
+    type: FILE_PATH
+    required: true
+  prompt:
+    type: STRING
+    required: true
+  model:
+    type: STRING
+  reasoning_effort:
+    type: STRING
+
+reliability:
+  max_retries: 10
+
+steps:
+  inspect:
+    type: AI_CODING_AGENT
+    inputs:
+      working_directory:
+        type: FILE_PATH
+        required: true
+      prompt:
+        type: STRING
+        required: true
+      model:
+        type: STRING
+      reasoning_effort:
+        type: STRING
+      output_json:
+        type: JSON_SCHEMA
+        value:
+          type: object
+          properties:
+            summary:
+              type: string
+          required: [summary]
+          additionalProperties: false
+    reliability:
+      timeout: 3m
+      max_retries: 1
+    next: [end]
+
+  end:
+    type: TERMINAL

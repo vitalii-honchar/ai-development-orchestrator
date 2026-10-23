@@ -1,0 +1,118 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  settings:
+    gocritic:
+      enabled-checks:
+        - ruleguard
+      settings:
+        ruleguard:
+          rules: '${config-path}/lint/rules.go'
+          failOn: all
+    varnamelen:
+      min-name-length: 2
+      ignore-names:
+        - c  # gin.Context / mqtt.Client / consumer receivers
+        - d  # *DBPool receivers
+        - e  # *Elevator receivers
+        - m  # message / middleware receivers
+        - r  # runtime receivers
+        - s  # server receivers
+        - t  # telemetry value
+        - v  # env lookup value
+        - n  # integer parse result
+        - b  # marshalled bytes
+        - q  # const SQL queries
+        - nc  # *nats.Conn idiom
+        - mu  # sync.Mutex fields
+        - tx  # pgx.Tx idiom
+        - fn  # callback idiom
+        - wg  # sync.WaitGroup
+        - ch  # channel
+    wrapcheck:
+      # Start from wrapcheck's defaults (fmt.Errorf, errors.New, errors.Join,
+      # errors.Unwrap, .Wrap, .Wrapf) and add:
+      #   .Err( — ctx.Err() and tok.Error() are kept bare so callers can
+      #           errors.Is(context.Canceled / DeadlineExceeded, ...).
+      ignore-sigs:
+        - "fmt.Errorf("
+        - "fmt.Errorln("
+        - "errors.New("
+        - "errors.Unwrap("
+        - "errors.Join("
+        - ".Wrap("
+        - ".Wrapf("
+        - ".Err("
+      ignore-package-globs:
+        # Treat this project's own packages as "internal" so returning sentinels
+        # declared in them doesn't require re-wrapping at call sites.
+        - go-software-factory/internal/**
+  enable:
+    - errcheck      # Check for unchecked errors (default)
+    - govet         # Go vet built-in (default)
+    - ineffassign   # Detect ineffectual assignments (default)
+    - staticcheck   # Advanced static analysis (default)
+    - unused        # Check for unused code (default)
+    - misspell      # Check for misspellings
+    - err113
+    - errname
+    - funlen
+    - funcorder
+    - gochecknoinits
+    - gocognit
+    - goconst
+    - gocritic
+    - gosec
+    - iface
+    - lll
+    - interfacebloat
+    - musttag
+    - nestif
+    - nilerr
+    - nlreturn
+    - noctx
+    - paralleltest
+    - prealloc
+    - reassign
+    - sqlclosecheck
+    - tagalign
+    - testifylint
+    - testableexamples
+    - testpackage
+    - tparallel
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - varnamelen
+    - wastedassign
+    - whitespace
+    - wrapcheck
+  exclusions:
+    # Prototype CLIs under cmd/** and *_test.go files are noisier than library
+    # code; relax the most over-fire-prone linters there so we keep signal high
+    # in the reusable packages under internal/.
+    rules:
+      - path: cmd/
+        linters:
+          - varnamelen
+          - funlen
+          - gocognit
+          - err113
+          - wrapcheck
+          - gochecknoinits
+          - lll
+      - path: _test\.go
+        linters:
+          - varnamelen
+          - funlen
+          - gocognit
+          - err113
+          - wrapcheck
+          - testpackage
+
+formatters:
+  enable:
+    - gofmt

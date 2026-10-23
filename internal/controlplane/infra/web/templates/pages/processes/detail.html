@@ -1,0 +1,175 @@
+{{template "base" .}}
+{{define "title"}}Run {{printf "%.8s" .Process.ID.String}}{{if .Definition}} · {{.Definition.Name}}{{end}}{{end}}
+{{define "content"}}
+<section aria-labelledby="page-title">
+    <a class="back-link" href="/processes/?process_definition_id={{.Process.ProcessDefinitionID}}"><span aria-hidden="true">←</span> Execution history</a>
+    <div class="page-heading">
+        <div><p class="eyebrow">Execution · {{printf "%.8s" .Process.ID.String}}</p><h1 id="page-title">{{if .Definition}}{{if .Definition.Name}}{{.Definition.Name}}{{else}}Untitled definition{{end}}{{else}}Unavailable definition{{end}}</h1><p class="page-description">Started <time datetime="{{.Process.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}">{{.Process.CreatedAt.UTC.Format "02 Jan 2006 · 15:04:05"}}</time> UTC</p></div>
+        <div class="page-actions">{{if .Definition}}<a class="text-link small muted" href="/process-definitions/{{.Process.ProcessDefinitionID}}">View definition</a>{{end}}<a href="/processes/{{.Process.ID}}" class="button button-secondary">Refresh <span aria-hidden="true">↻</span></a></div>
+    </div>
+    <div class="execution-summary-bar">
+        {{template "processes/state" .Process.State}}
+        {{if .Process.IsFinalState}}<span class="small muted">Duration <strong>{{executionDuration .Process.Reliability.ExecutionTime}}</strong></span>
+        {{else}}{{$hasCurrent := false}}{{range .Steps}}{{if .Node.Current}}{{$hasCurrent = true}}{{end}}{{end}}{{if $hasCurrent}}<span class="current-step-label">Current step{{if gt (len .Process.CurrentSteps) 1}}s{{end}}</span>{{range .Steps}}{{if .Node.Current}}<code>{{.Node.Name}}</code>{{end}}{{end}}{{else}}<span class="small muted">Waiting for the next step</span>{{end}}{{end}}
+    </div>
+    <p class="execution-status-note">{{if eq .Process.State "COMPLETED"}}Execution complete. Select a step to inspect its result.{{else if eq .Process.State "FAILED"}}Execution failed. Review its result below and inspect step details for more context.{{else}}Status reflects the last page load. Select a step for details or refresh to check progress.{{end}}</p>
+    <div class="execution-workspace">
+        {{template "processgraph" .Graph}}
+        <section class="execution-progress" aria-labelledby="progress-title">
+            <h2 id="progress-title">Steps</h2>
+            <ul class="step-progress-list">
+                {{range .Steps}}<li class="step-progress-item{{if .Node.Current}} is-current{{end}}" data-step-state="{{.Node.State}}">
+                    <button type="button" data-inspect-progress="{{.Node.ID}}"{{if .Node.Current}} aria-current="step"{{end}}>
+                        <span class="step-progress-icon" aria-hidden="true">{{if eq .Node.State "COMPLETED"}}✓{{else if eq .Node.State "FAILED"}}×{{else if .Node.Current}}●{{else}}○{{end}}</span>
+                        <span class="step-progress-copy"><strong>{{.Node.Name}}</strong><span>{{if .Node.Current}}Current · {{end}}{{.Node.StateLabel}}</span></span>
+                        {{if .Node.Step}}{{if .Node.Step.IsFinalState}}<span class="step-progress-time">{{executionDuration .Node.Step.Reliability.ExecutionTime}}</span>{{end}}{{end}}
+                    </button>
+                </li>{{end}}
+            </ul>
+        </section>
+    </div>
+    <div class="execution-supporting-details">
+        <details class="execution-disclosure"><summary>Inputs</summary>{{if .ProcessInputs}}{{template "processes/parameters" .ProcessInputs}}{{else}}<p class="panel-message">This execution has no input values.</p>{{end}}</details>
+        <details class="execution-disclosure"{{if .Process.IsFinalState}}{{if .ProcessResult}} open{{end}}{{end}}><summary>Result</summary>{{if .ProcessResult}}{{template "processes/parameters" .ProcessResult}}{{else}}<p class="panel-message">{{if .Process.IsFinalState}}Execution finished without result values.{{else}}No result recorded yet. Check the current step for progress.{{end}}</p>{{end}}</details>
+        <details class="execution-disclosure"><summary>Timing</summary><dl class="execution-step-metadata">
+            <div><dt>Started · UTC</dt><dd>{{.Process.CreatedAt.UTC.Format "02 Jan 2006 · 15:04:05"}}</dd></div>
+            <div><dt>Updated · UTC</dt><dd>{{.Process.UpdatedAt.UTC.Format "02 Jan 2006 · 15:04:05"}}</dd></div>
+        </dl></details>
+    </div>
+    {{if .Steps}}
+    <details class="execution-details-index" id="step-details-index">
+        <summary>Browse step details <span class="count">{{len .Steps}}</span></summary>
+        <div data-step-details>
+        {{range .Steps}}
+        <details class="execution-node-detail" id="{{.Node.ID}}-detail" data-step-name="{{.Node.Name}}">
+            <summary><code>{{.Node.Name}}</code><span class="small muted">{{.Node.StateLabel}}</span></summary>
+            <article class="execution-step">
+                <div class="execution-step-heading"><div><h3 id="{{.Node.ID}}-title"><code>{{.Node.Name}}</code></h3></div><span class="status{{if eq .Node.State "COMPLETED"}} status-active{{else if eq .Node.State "FAILED"}} status-failed{{end}}">{{.Node.StateLabel}}</span></div>
+                {{if .Node.Note}}<p class="step-detail-note">{{.Node.Note}}</p>{{end}}
+                {{if .Node.Step}}
+                <details class="execution-step-inputs"><summary>Step details</summary>
+                <dl class="execution-step-metadata">
+                    <div><dt>Type</dt><dd>{{.Node.Type}}</dd></div>
+                    <div><dt>Attempts</dt><dd>{{.Node.Step.Reliability.Executions}}</dd></div>
+                    <div><dt>Duration</dt><dd>{{if .Node.Step.IsFinalState}}{{executionDuration .Node.Step.Reliability.ExecutionTime}}{{else}}—{{end}}</dd></div>
+                    <div><dt>Queued · UTC</dt><dd>{{.Node.Step.CreatedAt.UTC.Format "02 Jan 2006 · 15:04:05"}}</dd></div>
+                    <div><dt>{{if .Node.Step.IsFinalState}}Finished{{else}}Updated{{end}} · UTC</dt><dd>{{.Node.Step.UpdatedAt.UTC.Format "02 Jan 2006 · 15:04:05"}}</dd></div>
+                </dl>
+                </details>
+                <div class="execution-step-result"><h4>{{if .Node.Step.IsFinalState}}Result{{else}}Latest recorded output{{end}}</h4>{{if .Result}}{{if not .Node.Step.IsFinalState}}<p class="step-detail-note">This step has not finished. Recorded output may come from an earlier attempt.</p>{{end}}{{template "processes/parameters" .Result}}{{else}}<p class="panel-message">{{if .Node.Step.IsFinalState}}No result values recorded for this step.{{else}}No output recorded yet.{{end}}</p>{{end}}</div>
+                <details class="execution-step-inputs"><summary>Parameters</summary>{{template "processes/parameters" .Params}}</details>
+                {{end}}
+                <div class="step-next"><span class="small muted">Next steps</span>{{range $next := .Node.Next}}{{$target := "step-details-index"}}{{range $.Steps}}{{if eq .Node.Name $next}}{{$target = printf "%s-detail" .Node.ID}}{{end}}{{end}}<a class="text-link mono" href="#{{$target}}" data-inspect-next="{{$next}}" aria-label="Inspect next step {{$next}}">{{$next}}</a>{{else}}<span class="small muted">None</span>{{end}}</div>
+            </article>
+        </details>
+        {{end}}
+        </div>
+    </details>
+    <dialog class="execution-step-dialog" id="process-step-dialog" aria-label="Step details">
+        <form method="dialog" class="step-dialog-bar"><span class="small muted">Step details</span><button class="button button-secondary" aria-label="Close step details">Close <span aria-hidden="true">×</span></button></form>
+        <div data-step-dialog-content></div>
+    </dialog>
+    <script>
+        (() => {
+            const dialog = document.getElementById('process-step-dialog');
+            const content = dialog.querySelector('[data-step-dialog-content]');
+            if (typeof dialog.showModal === 'function') {
+                document.querySelector('.execution-details-index').hidden = true;
+                const browse = document.querySelector('[data-graph-steps-link]');
+                if (browse) browse.href = '#progress-title';
+            }
+            let selectedDetail, selectedArticle, trigger;
+            const inspect = (id, source) => {
+                const detail = document.getElementById(id + '-detail');
+                if (!detail) return;
+                if (typeof dialog.showModal !== 'function') {
+                    detail.closest('.execution-details-index').open = true;
+                    detail.open = true;
+                    detail.scrollIntoView({block: 'center'});
+                    return;
+                }
+                const switching = dialog.open;
+                if (switching) selectedDetail.append(selectedArticle);
+                selectedDetail = detail;
+                selectedArticle = detail.querySelector('article');
+                if (!switching) trigger = source;
+                content.append(selectedArticle);
+                dialog.setAttribute('aria-labelledby', id + '-title');
+                if (!switching) dialog.showModal();
+                else {
+                    const heading = selectedArticle.querySelector('h3');
+                    heading.tabIndex = -1;
+                    heading.focus();
+                    dialog.scrollTop = 0;
+                }
+            };
+            document.addEventListener('processgraph:select', event => inspect(event.detail.id, event.detail.trigger));
+            for (const button of document.querySelectorAll('[data-inspect-progress]')) {
+                button.addEventListener('click', () => inspect(button.dataset.inspectProgress, button));
+            }
+            for (const detail of document.querySelectorAll('[data-step-details] > details')) {
+                const summary = detail.querySelector('summary');
+                summary.addEventListener('click', event => {
+                    event.preventDefault();
+                    inspect(detail.id.replace(/-detail$/, ''), summary);
+                });
+            }
+            const byName = new Map([...document.querySelectorAll('[data-step-name]')].map(detail => [detail.dataset.stepName, detail]));
+            for (const link of document.querySelectorAll('[data-inspect-next]')) {
+                const target = byName.get(link.dataset.inspectNext);
+                if (!target) continue;
+                link.href = '#' + target.id;
+                link.addEventListener('click', event => {
+                    event.preventDefault();
+                    inspect(target.id.replace(/-detail$/, ''), link);
+                });
+            }
+            dialog.addEventListener('close', () => {
+                selectedDetail.append(selectedArticle);
+                trigger?.focus();
+            });
+            let startedOnBackdrop = false;
+            const outsideDialog = event => {
+                const bounds = dialog.getBoundingClientRect();
+                return event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+            };
+            dialog.addEventListener('pointerdown', event => {
+                startedOnBackdrop = event.button === 0 && event.target === dialog && outsideDialog(event);
+            });
+            dialog.addEventListener('pointercancel', () => { startedOnBackdrop = false; });
+            dialog.addEventListener('click', event => {
+                const dismiss = startedOnBackdrop && event.target === dialog && outsideDialog(event);
+                startedOnBackdrop = false;
+                if (dismiss) dialog.close();
+            });
+        })();
+    </script>
+    {{else}}<p class="panel-message">No steps available for this execution.</p>{{end}}
+    <script>
+        (() => {
+            if (!navigator.clipboard?.writeText) return;
+            for (const button of document.querySelectorAll('[data-copy-value]')) {
+                button.hidden = false;
+                button.addEventListener('click', async () => {
+                    const parameter = button.closest('.execution-parameter');
+                    const value = parameter.querySelector('pre');
+                    const status = parameter.querySelector('[data-copy-status]');
+                    button.disabled = true;
+                    try {
+                        await navigator.clipboard.writeText(value.textContent);
+                        button.textContent = 'Copied ✓';
+                        status.textContent = 'Value copied to clipboard.';
+                        setTimeout(() => { button.textContent = 'Copy value'; }, 2000);
+                    } catch (error) {
+                        const disclosure = value.closest('details');
+                        if (disclosure) disclosure.open = true;
+                        status.textContent = 'Copy unavailable. Select and copy the value below.';
+                        value.tabIndex = 0;
+                        value.focus();
+                    } finally { button.disabled = false; }
+                });
+            }
+        })();
+    </script>
+</section>
+{{end}}

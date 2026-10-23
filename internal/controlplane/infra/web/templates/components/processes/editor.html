@@ -1,0 +1,234 @@
+{{define "processes/editor"}}
+<script>
+(() => {
+    const form = document.getElementById('execution-form');
+    const fields = [...form.querySelectorAll('[data-text-editor]')];
+    const base = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/';
+    const editors = new Map();
+    const submit = form.querySelector('button[type="submit"]');
+    const submitLabel = submit.innerHTML;
+    const submitStatus = form.querySelector('[data-submit-status]');
+    let submitting = false;
+    const inputs = [...form.querySelectorAll('input[name^="input."], textarea[name^="input."]')];
+    const initialValues = inputs.map(input => input.value);
+    const serverError = document.getElementById('execution-error');
+    const hasUnsavedError = Boolean(serverError);
+    serverError?.focus();
+    const hasChanges = () => hasUnsavedError || inputs.some((input, index) => input.value !== initialValues[index]);
+    window.addEventListener('beforeunload', event => {
+        if (submitting || !hasChanges()) return;
+        event.preventDefault();
+        event.returnValue = '';
+    });
+    const cancel = form.querySelector('.definition-actions a');
+    const discard = document.getElementById('execution-discard-dialog');
+    cancel.addEventListener('click', event => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        if (!hasChanges() || typeof discard.showModal !== 'function') return;
+        event.preventDefault();
+        discard.showModal();
+    });
+    document.getElementById('discard-execution-confirm').addEventListener('click', () => {
+        submitting = true;
+        discard.close();
+        window.location.assign(cancel.href);
+    });
+    form.addEventListener('submit', event => {
+        if (submitting) { event.preventDefault(); return; }
+        submitting = true;
+        submit.disabled = true;
+        submit.textContent = 'Starting execution…';
+        submitStatus.textContent = 'Queuing your execution. Please wait…';
+        form.setAttribute('aria-busy', 'true');
+    });
+    window.addEventListener('pageshow', event => {
+        if (!event.persisted) return;
+        submitting = false;
+        submit.disabled = false;
+        submit.innerHTML = submitLabel;
+        submitStatus.textContent = 'Starting queues a new execution.';
+        form.removeAttribute('aria-busy');
+    });
+    let workerURL;
+    let firstInvalid;
+    form.addEventListener('invalid', event => {
+        event.preventDefault();
+        const input = event.target;
+        const field = input.closest('.execution-field');
+        if (!field) return;
+        const status = field.querySelector('[data-validation-status]');
+        status.textContent = input.validationMessage;
+        status.hidden = false;
+        input.setAttribute('aria-invalid', 'true');
+        if (firstInvalid) return;
+        firstInvalid = input;
+        requestAnimationFrame(() => {
+            const target = firstInvalid;
+            firstInvalid = null;
+            target.closest('.execution-field').scrollIntoView({block: 'center'});
+            const editor = editors.get(target.closest('[data-text-editor]'));
+            if (editor && target.hidden) editor.focus(); else target.focus();
+        });
+    }, true);
+    form.addEventListener('input', event => {
+        const field = event.target.closest('.execution-field');
+        if (!field) return;
+        event.target.removeAttribute('aria-invalid');
+        field.querySelector('[data-validation-status]').hidden = true;
+    });
+    const fallback = () => {
+        for (const field of fields) {
+            const textarea = field.querySelector('textarea');
+            const editor = editors.get(field);
+            if (editor) {
+                if (textarea.hidden) textarea.value = editor.getValue();
+                editor.dispose();
+            }
+            textarea.hidden = false;
+            field.querySelector('[data-editor-container]').hidden = true;
+            field.querySelector('[data-editor-toggle]').hidden = true;
+            const note = field.querySelector('[data-editor-note]');
+            note.textContent = 'Code editor unavailable. Continue in the text field.';
+            note.hidden = false;
+        }
+        editors.clear();
+    };
+    for (const field of fields) {
+        const button = field.querySelector('[data-editor-toggle]');
+        const textarea = field.querySelector('textarea');
+        const container = field.querySelector('[data-editor-container]');
+        const note = field.querySelector('[data-editor-note]');
+        container.addEventListener('keydown', event => {
+            if (event.key !== 'Escape' || !event.shiftKey) return;
+            event.preventDefault();
+            event.stopPropagation();
+            button.focus();
+        }, true);
+        button.hidden = false;
+        button.addEventListener('click', () => {
+            const plain = field.dataset.plain !== 'true';
+            field.dataset.plain = String(plain);
+            const editor = editors.get(field);
+            if (plain) {
+                if (editor) textarea.value = editor.getValue();
+                textarea.hidden = false;
+                container.hidden = true;
+                textarea.focus();
+            } else if (editor) {
+                editor.setValue(textarea.value);
+                textarea.hidden = true;
+                container.hidden = false;
+                editor.layout();
+                editor.focus();
+            }
+            button.textContent = plain ? 'Use code editor' : 'Use plain text';
+            button.setAttribute('aria-label', button.textContent + ' for ' + field.dataset.label);
+            note.textContent = plain ? 'Plain text mode. Tab moves to the next field.' : editor ? 'Code editor mode. Press Shift+Esc to reach the editing-mode button.' : 'Loading code editor. You can keep typing here.';
+            note.hidden = false;
+        });
+    }
+    if (fields.length) {
+        const loader = document.createElement('script');
+        loader.src = base + 'vs/loader.js';
+        loader.onerror = fallback;
+        loader.onload = () => {
+            try {
+                workerURL = URL.createObjectURL(new Blob([
+                    'self.MonacoEnvironment = {baseUrl:' + JSON.stringify(base) + '};\n' +
+                    'importScripts(' + JSON.stringify(base + 'vs/base/worker/workerMain.js') + ');'
+                ], {type: 'text/javascript'}));
+                window.MonacoEnvironment = {getWorkerUrl: () => workerURL};
+                require.config({paths: {vs: base + 'vs'}});
+                require(['vs/editor/editor.main'], () => {
+                    try {
+                        const theme = getComputedStyle(document.documentElement);
+                        const color = name => theme.getPropertyValue(name).trim();
+                        monaco.editor.defineTheme('factory-input', {
+                            base: 'vs-dark', inherit: true, rules: [],
+                            colors: {'editor.background': color('--editor-bg'), 'editor.foreground': color('--text'), 'editorLineNumber.foreground': color('--subtle'), 'editor.selectionBackground': color('--selection')}
+                        });
+                        for (const field of fields) {
+                            const textarea = field.querySelector('textarea');
+                            const container = field.querySelector('[data-editor-container]');
+                            container.hidden = false;
+                            const editor = monaco.editor.create(container, {
+                                value: textarea.value, language: field.dataset.language, theme: 'factory-input',
+                                ariaLabel: field.dataset.label + (textarea.required ? '. Required. ' : '. Optional. ') + document.getElementById('help-' + textarea.id.replace(/^input-/, '')).textContent,
+                                automaticLayout: true, wordWrap: 'on',
+                                minimap: {enabled: false}, lineNumbers: 'on', folding: false,
+                                scrollBeyondLastLine: false, fontFamily: color('--font-mono'),
+                                fontSize: 13, lineHeight: 23, padding: {top: 18, bottom: 18},
+                                overviewRulerLanes: 0, renderLineHighlight: 'none', tabSize: 2
+                            });
+                            editors.set(field, editor);
+                            editor.onDidChangeModelContent(() => {
+                                textarea.value = editor.getValue();
+                                textarea.dispatchEvent(new Event('input', {bubbles: true}));
+                            });
+                            for (const label of textarea.labels) label.addEventListener('click', () => {
+                                if (textarea.hidden) editor.focus();
+                            });
+                            const plain = field.dataset.plain === 'true' || document.activeElement === textarea;
+                            field.dataset.plain = String(plain);
+                            textarea.hidden = !plain;
+                            container.hidden = plain;
+                            const button = field.querySelector('[data-editor-toggle]');
+                            button.textContent = plain ? 'Use code editor' : 'Use plain text';
+                            button.setAttribute('aria-label', button.textContent + ' for ' + field.dataset.label);
+                            const note = field.querySelector('[data-editor-note]');
+                            note.textContent = plain ? 'Plain text mode. Tab moves to the next field.' : 'Code editor mode. Press Shift+Esc to reach the editing-mode button.';
+                            note.hidden = false;
+                        }
+                    } catch (error) { fallback(); }
+                }, fallback);
+            } catch (error) { fallback(); }
+        };
+        document.head.appendChild(loader);
+    }
+    for (const button of form.querySelectorAll('[data-choose-directory]')) {
+        button.addEventListener('click', async () => {
+            const input = document.getElementById(button.dataset.chooseDirectory);
+            const status = button.closest('.execution-field').querySelector('[data-directory-status]');
+            const label = button.innerHTML;
+            button.disabled = true;
+            button.textContent = 'Choosing…';
+            status.classList.remove('field-error');
+            status.textContent = 'Choose a folder in the system dialog.';
+            status.hidden = false;
+            let cancelled = false;
+            try {
+                const response = await fetch('/processes/choose-directory', {
+                    method: 'POST', credentials: 'same-origin', redirect: 'error',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({_csrf: form.elements._csrf.value})
+                });
+                if (response.status === 204) {
+                    status.textContent = 'No folder selected. You can enter a path instead.';
+                    cancelled = true;
+                    return;
+                }
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Unable to choose a folder.');
+                input.value = data.path;
+                input.dispatchEvent(new Event('input', {bubbles: true}));
+                status.textContent = 'Folder selected.';
+                input.focus();
+            } catch (error) {
+                status.classList.add('field-error');
+                status.textContent = error.message || 'Unable to choose a folder.';
+                status.hidden = false;
+            } finally {
+                button.disabled = false;
+                button.innerHTML = label;
+                if (cancelled) button.focus();
+            }
+        });
+    }
+    window.addEventListener('pagehide', event => {
+        if (event.persisted) return;
+        for (const editor of editors.values()) editor.dispose();
+        if (workerURL) URL.revokeObjectURL(workerURL);
+    });
+})();
+</script>
+{{end}}

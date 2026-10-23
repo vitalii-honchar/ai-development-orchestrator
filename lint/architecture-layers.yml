@@ -1,0 +1,49 @@
+# Generic layer rules for every service under internal/.
+version: 3
+workdir: internal
+
+allow:
+  deepScan: false
+  # Services do not need to contain every layer.
+  ignoreNotFoundComponents: true
+
+# Integration tests may wire infrastructure into application code.
+excludeFiles:
+  - '_test\.go$'
+
+components:
+  domain: { in: '*/domain/**' }
+  app: { in: '*/app/**' }
+  infra: { in: '*/infra/**' }
+  configuration: { in: '*/config/**' }
+  # Match only service-root packages, not their descendants.
+  bootstrap: { in: '*' }
+  validator: { in: 'core/validator/**' }
+  core-helpers:
+    in:
+      - 'core/dsl/**'
+      - 'core/logger/**'
+      - 'core/scheduler/**'
+      - 'core/service/**'
+
+deps:
+  domain:
+    mayDependOn: [domain, validator]
+  app:
+    mayDependOn: [app, domain, validator]
+    anyVendorDeps: true
+  infra:
+    mayDependOn: [infra, app, domain, validator, core-helpers]
+    anyVendorDeps: true
+  configuration:
+    anyProjectDeps: true
+    anyVendorDeps: true
+  bootstrap:
+    anyProjectDeps: true
+    anyVendorDeps: true
+  validator:
+    mayDependOn: [validator]
+    anyVendorDeps: true
+  core-helpers:
+    mayDependOn: [core-helpers, domain, validator, configuration]
+    anyVendorDeps: true

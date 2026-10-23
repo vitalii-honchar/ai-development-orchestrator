@@ -1,0 +1,73 @@
+{{template "base" .}}
+{{define "title"}}{{if .EditMode}}Edit · {{end}}{{if .Definition.Name}}{{.Definition.Name}}{{else}}Untitled definition{{end}}{{end}}
+{{define "content"}}
+
+<section aria-labelledby="page-title">
+    <a class="back-link" href="/process-definitions/"><span aria-hidden="true">←</span> Process definitions</a>
+    <div class="definition-heading">
+        <div class="definition-title-group">
+            <div class="definition-overline"><span class="status {{if eq .Definition.State "ACTIVE"}}status-active{{else if eq .Definition.State "DRAFT"}}status-draft{{end}}">{{if eq .Definition.State "ACTIVE"}}Active{{else if eq .Definition.State "DRAFT"}}Draft{{else}}{{.Definition.State}}{{end}}</span><span class="small muted">Definition · v{{.Definition.Version}}</span></div>
+            <h1 id="page-title" class="definition-title">{{if .Definition.Name}}{{.Definition.Name}}{{else}}Untitled definition{{end}}</h1>
+            {{if .Definition.Description}}<p class="definition-description page-description">{{.Definition.Description}}</p>{{end}}
+        </div>
+        <nav class="definition-tabs" aria-label="Definition mode">
+            <a href="/process-definitions/{{.Definition.ID}}" {{if not .EditMode}}aria-current="page"{{end}}>View</a>
+            <a href="/process-definitions/{{.Definition.ID}}?mode=edit" {{if .EditMode}}aria-current="page"{{end}}>Edit YAML</a>
+        </nav>
+    </div>
+    <details class="execution-disclosure definition-details"><summary>Definition details <span class="small muted">v{{.Definition.Version}}</span></summary>
+    <dl class="definition-metadata">
+        <div><dt>State / Version</dt><dd><span class="status {{if eq .Definition.State "ACTIVE"}}status-active{{else if eq .Definition.State "DRAFT"}}status-draft{{end}}">{{.Definition.State}}</span> <span class="mono muted">· v{{.Definition.Version}}</span></dd></div>
+        <div><dt>Created · UTC</dt><dd><time datetime="{{.Definition.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}">{{.Definition.CreatedAt.UTC.Format "02 Jan 2006 · 15:04:05"}}</time></dd></div>
+        <div><dt>Updated · UTC</dt><dd><time datetime="{{.Definition.UpdatedAt.UTC.Format "2006-01-02T15:04:05Z"}}">{{.Definition.UpdatedAt.UTC.Format "02 Jan 2006 · 15:04:05"}}</time></dd></div>
+    </dl>
+    </details>
+    {{if .EditMode}}
+        <p class="editor-note">Edit the definition below. YAML is reconstructed from the saved definition; original comments and formatting are not retained.</p>
+        {{template "processdefinitions/editor" .}}
+    {{else}}
+        <div class="execution-launch">
+            <p class="small muted">{{if eq .Definition.State "ACTIVE"}}Ready to run. Each execution uses the inputs you provide.{{else}}Only active definitions can start new executions.{{end}}</p>
+            <div class="execution-launch-actions">
+                <a class="button button-secondary" href="/processes/?process_definition_id={{.Definition.ID}}">View processes</a>
+                {{if eq .Definition.State "ACTIVE"}}<a class="button button-primary" href="/process-definitions/{{.Definition.ID}}/execute">Start execution <span aria-hidden="true">→</span></a>{{end}}
+            </div>
+        </div>
+        {{template "processgraph" .Graph}}
+        <div class="definition-panels">
+            <section class="panel" aria-labelledby="inputs-title">
+                <div class="panel-heading"><h2 id="inputs-title" class="panel-title">Process inputs</h2></div>
+                {{if .Definition.Inputs.Len}}<table class="definition-table"><thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Required</th></tr></thead><tbody>
+                {{range $name := inputNames .Definition.Inputs}}{{$input := $.Definition.Inputs.Get $name}}<tr><th scope="row"><code>{{$name}}</code></th><td>{{$input.Type}}</td><td>{{if $input.Required}}Yes{{else}}No{{end}}</td></tr>{{end}}
+                </tbody></table>{{else}}<p class="panel-message">No process inputs declared.</p>{{end}}
+            </section>
+            <section class="panel" aria-labelledby="reliability-title">
+                <div class="panel-heading"><h2 id="reliability-title" class="panel-title">Process reliability</h2></div>
+                <dl class="definition-values">
+                    <div><dt class="definition-section-label">Timeout</dt><dd>{{if .Definition.Reliability.Timeout}}{{.Definition.Reliability.Timeout}}{{else}}Not set{{end}}</dd></div>
+                    <div><dt class="definition-section-label">Max retries</dt><dd>{{.Definition.Reliability.MaxRetries}}</dd></div>
+                    <div><dt class="definition-section-label">Retry delay</dt><dd>{{.Definition.Reliability.RetryDelay}}</dd></div>
+                </dl>
+            </section>
+        </div>
+        <section class="panel" aria-labelledby="steps-title">
+            <div class="panel-heading"><h2 id="steps-title" class="panel-title">Steps and connections</h2></div>
+            {{if .Definition.Graph.Nodes}}
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Step details">
+                <table class="definition-table definition-steps"><thead><tr><th scope="col">Step</th><th scope="col">Type</th><th scope="col">Inputs</th><th scope="col">Reliability</th><th scope="col">Next steps</th></tr></thead><tbody>
+                {{range $name, $step := .Definition.Graph.Nodes}}
+                    <tr>
+                        <th scope="row"><code>{{$name}}</code></th>
+                        <td>{{if $step.Type}}<code>{{$step.Type}}</code>{{else}}<span class="muted">Not set</span>{{end}}</td>
+                        <td>{{range $inputName, $input := $step.Params.Entries}}<p class="step-values"><code>{{$inputName}}</code> · {{$input.Type}} · {{if $input.Required}}Required{{else}}Optional{{end}}</p>{{else}}<span class="muted">None</span>{{end}}</td>
+                        <td class="step-values"><p>Timeout: {{if $step.Reliability.Timeout}}{{$step.Reliability.Timeout}}{{else}}Not set{{end}}</p><p>Max retries: {{$step.Reliability.MaxRetries}}</p><p>Retry delay: {{$step.Reliability.RetryDelay}}</p></td>
+                        <td>{{range index $.Definition.Graph.Edges $name}}<p><span aria-hidden="true">→ </span><code>{{.}}</code></p>{{else}}<span class="muted">None</span>{{end}}</td>
+                    </tr>
+                {{end}}
+                </tbody></table>
+            </div>
+            {{else}}<p class="panel-message">No steps defined.</p>{{end}}
+        </section>
+    {{end}}
+</section>
+{{end}}

@@ -1,0 +1,23 @@
+# Service boundaries also apply to tests. New services must be registered here.
+version: 3
+workdir: internal
+
+allow:
+  deepScan: false
+  depOnAnyVendor: true
+
+components:
+  core: { in: 'core/**' }
+  engine: { in: 'engine/**' }
+  worker: { in: 'worker/**' }
+  controlplane: { in: 'controlplane/**' }
+
+deps:
+  core:
+    mayDependOn: [core]
+  engine:
+    mayDependOn: [engine, core]
+  controlplane:
+    mayDependOn: [controlplane, engine, core]
+  worker:
+    mayDependOn: [worker, core]

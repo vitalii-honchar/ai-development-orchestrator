@@ -1,0 +1,51 @@
+{{template "base" .}}
+{{define "title"}}Start · {{.Definition.Name}}{{end}}
+{{define "content"}}
+<section class="execution-create" aria-labelledby="page-title">
+    <a class="back-link" href="/process-definitions/{{.Definition.ID}}"><span aria-hidden="true">←</span> Process definition</a>
+    <div class="page-heading"><div><p class="eyebrow">New execution</p><h1 id="page-title">{{.Definition.Name}}</h1><p class="page-description">Provide the inputs for this run. Review them before starting.</p></div><span class="status status-active">Active · v{{.Definition.Version}}</span></div>
+    {{if .Error}}<div class="alert" role="alert" id="execution-error" tabindex="-1"><p class="alert-title">Execution could not be started</p><p>{{.Error}}</p><p>Your inputs are preserved below. Review them and try again.</p></div>{{end}}
+    <form id="execution-form" action="/process-definitions/{{.Definition.ID}}/execute" method="post">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+        <section aria-label="Execution inputs">
+            {{if .Definition.Inputs.Len}}<p class="input-guidance">Fields marked <span class="required-label">Required</span> must be filled in. Optional inputs can be left blank.</p>{{end}}
+            {{if .Definition.Inputs.Len}}<div class="execution-fields">
+            {{range $name := inputNames .Definition.Inputs}}{{$input := $.Definition.Inputs.Get $name}}
+                <div class="execution-field">
+                    <label for="input-{{$name}}">{{inputLabel $name}}<span class="field-requirement{{if $input.Required}} required-label{{end}}">{{if $input.Required}}Required{{else}}Optional{{end}}</span></label>
+                    {{if eq $input.Type "FILE_PATH"}}
+                    <div class="directory-field">
+                        <input type="text" id="input-{{$name}}" name="input.{{$name}}" value="{{index $.InputValues $name}}" {{if $input.Required}}required{{end}} aria-describedby="help-{{$name}} error-{{$name}}" spellcheck="false" placeholder="/path/to/project">
+                        {{if eq $name "working_directory"}}<button type="button" class="button button-secondary" data-choose-directory="input-{{$name}}">Choose folder <span aria-hidden="true">↗</span></button>{{end}}
+                    </div>
+                    {{if eq $name "working_directory"}}<p class="field-error" data-directory-status role="status" hidden></p>{{end}}
+                    {{else if and (eq $input.Type "STRING") (or (eq $name "model") (eq $name "reasoning_effort"))}}
+                    <input type="text" id="input-{{$name}}" name="input.{{$name}}" value="{{index $.InputValues $name}}" {{if $input.Required}}required{{end}} aria-describedby="help-{{$name}} error-{{$name}}" spellcheck="false" autocomplete="off">
+                    {{else if or (eq $input.Type "JSON") (eq $input.Type "JSON_SCHEMA") (eq $input.Type "REFERENCES_ARRAY") (eq $name "prompt") (eq $name "description")}}
+                    <div class="execution-editor" data-text-editor data-language="{{if or (eq $input.Type "JSON") (eq $input.Type "JSON_SCHEMA") (eq $input.Type "REFERENCES_ARRAY")}}json{{else}}plaintext{{end}}" data-label="{{inputLabel $name}}">
+                        <div class="input-editor-tools"><span class="small muted">Text editor</span><button type="button" class="text-button" data-editor-toggle aria-label="Use plain text for {{inputLabel $name}}" hidden>Use plain text</button></div>
+                        <textarea id="input-{{$name}}" name="input.{{$name}}" rows="8" {{if $input.Required}}required{{end}} aria-describedby="help-{{$name}} error-{{$name}}" spellcheck="false">{{index $.InputValues $name}}</textarea>
+                        <div class="execution-monaco" data-editor-container hidden></div>
+                        <p class="field-help" data-editor-note role="status" hidden></p>
+                    </div>
+                    {{else}}
+                    <textarea id="input-{{$name}}" name="input.{{$name}}" rows="3" {{if $input.Required}}required{{end}} aria-describedby="help-{{$name}} error-{{$name}}" spellcheck="false">{{index $.InputValues $name}}</textarea>
+                    {{end}}
+                    <p class="field-error" id="error-{{$name}}" data-validation-status role="alert" hidden></p>
+                    <p class="field-help" id="help-{{$name}}">{{if eq $input.Type "FILE_PATH"}}Enter an absolute path on the machine running the factory.{{else if eq $input.Type "JSON_SCHEMA"}}Enter a valid JSON Schema object.{{else if eq $input.Type "JSON"}}Enter a valid JSON value.{{else if eq $input.Type "REFERENCES_ARRAY"}}Enter references as a JSON array.{{else if eq $name "model"}}Use a model supported by your agent.{{if not $input.Required}} Leave blank to use the configured default.{{end}}{{else if eq $name "reasoning_effort"}}Use a reasoning level supported by your model.{{if not $input.Required}} Leave blank to use the configured default.{{end}}{{else if or (eq $name "prompt") (eq $name "description")}}Describe what the agent should do, including any constraints.{{else}}{{$input.Type}} input.{{end}}</p>
+                </div>
+            {{end}}
+            </div>{{else}}<p class="panel-message">This definition has no inputs. Start execution to queue its first steps.</p>{{end}}
+        </section>
+        <div class="definition-actions"><p class="small muted" data-submit-status role="status">Starting queues a new execution.</p><a href="/process-definitions/{{.Definition.ID}}" class="button button-secondary">Cancel</a><button type="submit" class="button button-primary">Start execution <span aria-hidden="true">→</span></button></div>
+    </form>
+    <dialog class="execution-step-dialog discard-dialog" id="execution-discard-dialog" aria-labelledby="discard-execution-title">
+        <form method="dialog" class="discard-dialog-content">
+            <h2 id="discard-execution-title">Discard execution inputs?</h2>
+            <p>Your inputs have not been submitted. Keep editing to preserve them.</p>
+            <div class="definition-actions"><button class="button button-secondary" value="keep">Keep editing</button><button type="button" class="button button-primary" id="discard-execution-confirm">Discard inputs</button></div>
+        </form>
+    </dialog>
+    {{template "processes/editor" .}}
+</section>
+{{end}}

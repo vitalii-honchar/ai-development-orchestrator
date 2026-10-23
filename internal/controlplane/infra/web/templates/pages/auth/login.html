@@ -1,0 +1,19 @@
+{{template "base" .}}
+{{define "title"}}Sign in{{end}}
+{{define "content"}}
+<section class="login-card" aria-labelledby="login-title">
+    <div class="brand">{{template "brand" .}}</div>
+    <p class="eyebrow">Your workflow workshop</p>
+    <h1 id="login-title">Back to the factory.</h1>
+    <p class="page-description">Sign in to build workflows and follow every execution.</p>
+    <div id="login-error" role="alert" aria-live="polite">{{if .Error}}{{template "auth/error" .}}{{end}}</div>
+    <form method="post" action="/auth/login" hx-post="/auth/login" hx-target-error="#login-error" hx-swap="innerHTML">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" required autocomplete="username">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password">
+        <button type="submit" class="button button-primary">Sign in</button>
+    </form>
+</section>
+{{end}}

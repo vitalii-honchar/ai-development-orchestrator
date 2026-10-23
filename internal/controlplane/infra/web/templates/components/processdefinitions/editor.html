@@ -1,0 +1,165 @@
+{{define "processdefinitions/editor"}}
+
+    <form id="definition-form" method="post" action="{{.FormAction}}">
+        <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+        {{if .EditMode}}<input type="hidden" name="version" value="{{.ExpectedVersion}}">{{end}}
+        {{if .Error}}<div role="alert" class="alert" id="definition-error" tabindex="-1"><p class="alert-title">{{.ErrorTitle}}</p><pre class="definition-error">{{.Error}}</pre><p>Your YAML is preserved below.</p><button type="button" class="text-button" id="review-definition-yaml">Review YAML</button></div>{{end}}
+        <label class="sr-only" for="definition-yaml">Process definition YAML</label>
+        <div class="definition-editor">
+            <div class="definition-editor-bar"><span>process-definition.yaml</span><span>YAML · {{.EditorState}} v{{.EditorVersion}}</span><button type="button" class="text-button" id="definition-mode" hidden>Use plain text</button></div>
+            <textarea id="definition-yaml" name="yaml" spellcheck="false" aria-describedby="definition-help">{{.YAML}}</textarea>
+            <div id="yaml-editor" hidden></div>
+        </div>
+        <div class="editor-footer"><p id="editor-status" role="status">YAML editor. Changes are validated when you save.</p>
+        <p id="definition-help">{{.EditorHint}}</p></div>
+        <div class="definition-actions">
+            <p class="small muted" id="definition-submit-status" role="status"></p>
+            <a href="{{.CancelPath}}" class="button button-secondary">Cancel</a>
+            <button type="submit" class="button button-primary">{{.SubmitLabel}}</button>
+        </div>
+    </form>
+    <dialog class="execution-step-dialog discard-dialog" id="definition-discard-dialog" aria-labelledby="discard-definition-title">
+        <form method="dialog" class="discard-dialog-content">
+            <h2 id="discard-definition-title">Discard unsaved YAML?</h2>
+            <p>Your changes have not been saved. Keep editing to preserve them.</p>
+            <div class="definition-actions"><button class="button button-secondary" value="keep">Keep editing</button><button type="button" class="button button-primary" id="discard-definition-confirm">Discard changes</button></div>
+        </form>
+    </dialog>
+<script>
+(function () {
+    const textarea = document.getElementById('definition-yaml');
+    const container = document.getElementById('yaml-editor');
+    const status = document.getElementById('editor-status');
+    const form = document.getElementById('definition-form');
+    const mode = document.getElementById('definition-mode');
+    const submit = form.querySelector('button[type="submit"]');
+    const submitLabel = submit.innerHTML;
+    const submitStatus = document.getElementById('definition-submit-status');
+    const initialYAML = textarea.value;
+    const hasUnsavedError = Boolean(form.querySelector('[role="alert"]'));
+    let saving = false;
+    const hasChanges = () => hasUnsavedError || textarea.value !== initialYAML;
+    window.addEventListener('beforeunload', event => {
+        if (saving || !hasChanges()) return;
+        event.preventDefault();
+        event.returnValue = '';
+    });
+    window.addEventListener('pageshow', event => {
+        if (!event.persisted) return;
+        saving = false;
+        submit.disabled = false;
+        submit.innerHTML = submitLabel;
+        submitStatus.textContent = '';
+        form.removeAttribute('aria-busy');
+    });
+    const cancel = form.querySelector('.definition-actions a');
+    const discard = document.getElementById('definition-discard-dialog');
+    cancel.addEventListener('click', event => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        if (!hasChanges() || typeof discard.showModal !== 'function') return;
+        event.preventDefault();
+        discard.showModal();
+    });
+    document.getElementById('discard-definition-confirm').addEventListener('click', () => {
+        saving = true;
+        discard.close();
+        window.location.assign(cancel.href);
+    });
+    const base = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/';
+    let editor;
+    let workerURL;
+    let plain = false;
+    document.getElementById('definition-error')?.focus();
+    document.getElementById('review-definition-yaml')?.addEventListener('click', () => {
+        if (editor && !plain) editor.focus(); else textarea.focus();
+    });
+    container.addEventListener('keydown', event => {
+        if (event.key !== 'Escape' || !event.shiftKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        mode.focus();
+    }, true);
+    mode.hidden = false;
+    status.textContent = 'Loading code editor. You can also edit the text above.';
+    mode.addEventListener('click', () => {
+        plain = !plain;
+        mode.textContent = plain ? 'Use code editor' : 'Use plain text';
+        if (plain) {
+            if (editor) textarea.value = editor.getValue();
+            textarea.hidden = false;
+            container.hidden = true;
+            textarea.focus();
+        } else if (editor) {
+            editor.setValue(textarea.value);
+            textarea.hidden = true;
+            container.hidden = false;
+            editor.layout();
+            editor.focus();
+        }
+        status.textContent = plain ? 'Plain text mode. Tab moves to the next field.' : editor ? 'YAML · 2-space indentation. Press Shift+Esc to reach the editing-mode button.' : 'Loading code editor. You can keep typing here.';
+    });
+    function fallback() {
+        if (editor) {
+            if (textarea.hidden) textarea.value = editor.getValue();
+            editor.dispose();
+            editor = null;
+        }
+        textarea.hidden = false;
+        container.hidden = true;
+        mode.hidden = true;
+        status.textContent = 'Code editor unavailable. Continue editing YAML in the text field.';
+    }
+    form.addEventListener('submit', function (event) {
+        if (saving) { event.preventDefault(); return; }
+        if (editor && !plain) textarea.value = editor.getValue();
+        saving = true;
+        submit.disabled = true;
+        submit.textContent = 'Saving…';
+        submitStatus.textContent = 'Validating and saving your definition…';
+        form.setAttribute('aria-busy', 'true');
+    });
+    const loader = document.createElement('script');
+    loader.src = base + 'vs/loader.js';
+    loader.onerror = fallback;
+    loader.onload = function () {
+        try {
+            workerURL = URL.createObjectURL(new Blob([
+                'self.MonacoEnvironment = { baseUrl: ' + JSON.stringify(base) + ' };\n' +
+                'importScripts(' + JSON.stringify(base + 'vs/base/worker/workerMain.js') + ');'
+            ], {type: 'text/javascript'}));
+            window.MonacoEnvironment = {getWorkerUrl: function () { return workerURL; }};
+            require.config({paths: {vs: base + 'vs'}});
+            require(['vs/editor/editor.main'], function () {
+                try {
+                    container.hidden = false;
+                    const theme = getComputedStyle(document.documentElement);
+                    const color = name => theme.getPropertyValue(name).trim();
+                    monaco.editor.defineTheme('factory-workshop', {
+                        base: 'vs-dark', inherit: true, rules: [],
+                        colors: {'editor.background': color('--editor-bg'), 'editor.foreground': color('--text'), 'editorLineNumber.foreground': color('--subtle'), 'editorLineNumber.activeForeground': color('--accent'), 'editor.lineHighlightBorder': color('--border'), 'editor.selectionBackground': color('--selection')}
+                    });
+                    editor = monaco.editor.create(container, {
+                        value: textarea.value, language: 'yaml', theme: 'factory-workshop',
+                        ariaLabel: 'Process definition YAML', automaticLayout: true, wordWrap: 'on',
+                        lineNumbers: 'on', folding: true, tabSize: 2, insertSpaces: true,
+                        detectIndentation: false, minimap: {enabled: false},
+                        scrollBeyondLastLine: false, fontFamily: color('--font-mono'), fontSize: 13, padding: {top: 16, bottom: 16}
+                    });
+                    editor.onDidChangeModelContent(function () { textarea.value = editor.getValue(); });
+                    if (document.activeElement === textarea) plain = true;
+                    textarea.hidden = !plain;
+                    container.hidden = plain;
+                    mode.textContent = plain ? 'Use code editor' : 'Use plain text';
+                    status.textContent = plain ? 'Plain text mode. Tab moves to the next field.' : 'YAML · 2-space indentation. Press Shift+Esc to reach the editing-mode button.';
+                } catch (error) { fallback(); }
+            }, fallback);
+        } catch (error) { fallback(); }
+    };
+    window.addEventListener('pagehide', function (event) {
+        if (event.persisted) return;
+        if (workerURL) URL.revokeObjectURL(workerURL);
+    });
+    document.head.appendChild(loader);
+})();
+</script>
+{{end}}

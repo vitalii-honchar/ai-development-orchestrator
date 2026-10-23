@@ -1,0 +1,36 @@
+{{define "processdefinitions/list"}}
+<div id="definition-catalog" class="panel">
+    <div class="panel-heading"><h2>All definitions <span class="count">{{len .ProcessDefinitions}}</span></h2></div>
+    {{if .ProcessDefinitions}}
+    <p class="table-hint catalog-hint">Scroll horizontally to see state, version, and update time.</p>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Process definitions table">
+        <table class="catalog-table" role="table">
+            <caption class="sr-only">Process definitions. All dates are UTC.</caption>
+            <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Definition</th><th scope="col" role="columnheader">State</th><th scope="col" role="columnheader">Version</th><th scope="col" role="columnheader">Steps</th><th scope="col" role="columnheader">Updated <span class="small muted">· UTC</span></th><th scope="col" role="columnheader">Actions</th></tr></thead>
+            <tbody role="rowgroup">
+            {{range .ProcessDefinitions}}
+                <tr role="row">
+                    <th scope="row" role="rowheader">
+                        <a href="/process-definitions/{{.ID}}" class="definition-link">{{if .Name}}{{.Name}}{{else}}Untitled definition{{end}}<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a>
+                        {{if .Description}}<p class="catalog-description">{{.Description}}</p>{{end}}
+                    </th>
+                    <td role="cell" data-label="State"><span class="status {{if eq .State "ACTIVE"}}status-active{{else if eq .State "DRAFT"}}status-draft{{end}}">{{if eq .State "ACTIVE"}}Active{{else if eq .State "DRAFT"}}Draft{{else}}Archived{{end}}</span></td>
+                    <td role="cell" data-label="Version" class="mono muted">v{{.Version}}</td>
+                    <td role="cell" data-label="Steps" class="mono muted">{{len .Graph.Nodes}}</td>
+                    <td role="cell" data-label="Updated · UTC" class="date-cell"><time datetime="{{.UpdatedAt.UTC.Format "2006-01-02T15:04:05Z"}}">{{.UpdatedAt.UTC.Format "02 Jan 2006"}}</time><span>{{.UpdatedAt.UTC.Format "15:04"}}</span></td>
+                    <td role="cell" class="catalog-action-cell"><div class="catalog-actions">{{if eq .State "ACTIVE"}}<a class="button button-secondary" href="/process-definitions/{{.ID}}/execute" aria-label="Start execution of {{.Name}}">Start execution <span aria-hidden="true">→</span></a>{{end}}<a class="text-link small muted" href="/processes/?process_definition_id={{.ID}}" aria-label="View execution history of {{.Name}}">View history</a></div></td>
+                </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{else}}
+    <div class="empty-state">
+        <span class="empty-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="15" width="6" height="6" rx="1.5"/><path d="M6 9v9h9M9 6h9v9"/></svg></span>
+        <h3>No process definitions yet</h3>
+        <p>Create a definition to describe your workflow in YAML and connect its steps.</p>
+        <a href="/process-definitions/new" class="button button-primary empty-action">Create your first definition <span aria-hidden="true">→</span></a>
+    </div>
+    {{end}}
+</div>
+{{end}}

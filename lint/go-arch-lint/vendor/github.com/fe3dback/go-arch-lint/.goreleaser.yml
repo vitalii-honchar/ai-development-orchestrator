@@ -1,0 +1,47 @@
+before:
+  hooks:
+    - go mod download
+builds:
+  - id: "binary"
+    binary: go-arch-lint
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    ldflags:
+      - -s -w
+      - -X 'github.com/fe3dback/{{.ProjectName}}/internal/app.Version={{.Version}}'
+      - -X 'github.com/fe3dback/{{.ProjectName}}/internal/app.CommitHash={{.Commit}}'
+      - -X 'github.com/fe3dback/{{.ProjectName}}/internal/app.BuildTime={{.Date}}'
+archives:
+  - format_overrides:
+      - goos: windows
+        format: zip
+
+dockers:
+  - ids:
+      - binary
+    image_templates:
+      - fe3dback/{{.ProjectName}}:{{if eq .Prerelease ""}}release-v{{.RawVersion}}{{else}}dev-v{{.RawVersion}}-{{.Prerelease}}{{end}}
+      - fe3dback/{{.ProjectName}}:{{if eq .Prerelease ""}}release-v{{.Major}}.{{.Minor}}{{else}}dev-v{{.Major}}.{{.Minor}}-{{.Prerelease}}{{end}}
+      - fe3dback/{{.ProjectName}}:{{if eq .Prerelease ""}}release-v{{.Major}}{{else}}dev-v{{.Major}}-{{.Prerelease}}{{end}}
+      - fe3dback/{{.ProjectName}}:{{if eq .Prerelease ""}}latest-stable-release{{else}}dev-{{.Version}}{{end}}
+      - fe3dback/{{.ProjectName}}:latest
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'

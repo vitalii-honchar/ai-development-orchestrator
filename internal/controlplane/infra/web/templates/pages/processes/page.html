@@ -1,0 +1,44 @@
+{{template "base" .}}
+{{define "title"}}Execution history{{range .ProcessDefinitions}}{{if eq .ID.String $.SelectedDefinitionID}} · {{.Name}}{{end}}{{end}}{{end}}
+{{define "content"}}
+{{$selectedName := "Unavailable definition"}}{{$canStart := false}}
+{{range .ProcessDefinitions}}{{if eq .ID.String $.SelectedDefinitionID}}{{$selectedName = .Name}}{{$canStart = eq .State "ACTIVE"}}{{end}}{{end}}
+<section aria-labelledby="page-title">
+    <div class="page-heading">
+        <div><p class="eyebrow">Execution history</p><h1 id="page-title">Processes</h1><p class="page-description">Follow your runs and open any execution to inspect its steps and results.</p></div>
+        <a href="/processes/{{if .SelectedDefinitionID}}?process_definition_id={{.SelectedDefinitionID}}{{end}}" class="button button-secondary">Refresh <span aria-hidden="true">↻</span></a>
+    </div>
+    <form class="execution-filters" action="/processes/" method="get" aria-label="Filter executions">
+        <div class="execution-filter-field">
+            <label for="process-definition-filter">Process definition</label>
+            <select id="process-definition-filter" name="process_definition_id">
+                <option value="">All process definitions</option>
+                {{if and .SelectedDefinitionID (not .SelectedDefinitionExists)}}<option value="{{.SelectedDefinitionID}}" selected>Unavailable definition</option>{{end}}
+                {{range .ProcessDefinitions}}<option value="{{.ID}}"{{if eq .ID.String $.SelectedDefinitionID}} selected{{end}}>{{if .Name}}{{.Name}}{{else}}Untitled definition{{end}}</option>{{end}}
+            </select>
+        </div>
+        <button type="submit" class="button button-secondary">Apply filter</button>
+        {{if .SelectedDefinitionID}}<a href="/processes/" class="button button-secondary">Clear filter</a>{{end}}
+    </form>
+    <div class="panel">
+        <div class="panel-heading"><h2>{{if .SelectedDefinitionID}}Executions for {{if $selectedName}}{{$selectedName}}{{else}}Untitled definition{{end}}{{else}}All executions{{end}} <span class="count">{{len .Processes}}</span></h2></div>
+        {{if .Processes}}
+        <p class="table-hint catalog-hint">Scroll horizontally to see execution state and timing.</p>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Process executions">
+            <table class="catalog-table execution-catalog" role="table">
+                <caption class="sr-only">Process execution history. All dates are UTC.</caption>
+                <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Process</th><th scope="col" role="columnheader">Status</th><th scope="col" role="columnheader">Duration</th><th scope="col" role="columnheader">Started <span class="small muted">· UTC</span></th></tr></thead>
+                <tbody role="rowgroup">{{range .Processes}}<tr role="row">
+                    <th scope="row" role="rowheader"><a class="definition-link execution-link" href="/processes/{{.ID}}"><span>{{with index $.DefinitionNames .ProcessDefinitionID}}{{.}}{{else}}Unavailable definition{{end}}</span><span class="run-reference">Run {{printf "%.8s" .ID.String}} <span aria-hidden="true">→</span></span></a></th>
+                    <td role="cell" data-label="Status">{{template "processes/state" .State}}</td>
+                    <td role="cell" data-label="Duration" class="mono muted">{{if .IsFinalState}}{{executionDuration .Reliability.ExecutionTime}}{{else}}—{{end}}</td>
+                    <td role="cell" data-label="Started · UTC" class="date-cell"><time datetime="{{.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}">{{.CreatedAt.UTC.Format "02 Jan 2006"}}</time><span>{{.CreatedAt.UTC.Format "15:04:05"}}</span></td>
+                </tr>{{end}}</tbody>
+            </table>
+        </div>
+        {{else}}
+        <div class="empty-state"><span class="empty-icon" aria-hidden="true">▷</span>{{if .SelectedDefinitionID}}<h3>No executions for this definition</h3>{{if $canStart}}<p>Start the first execution of {{if $selectedName}}{{$selectedName}}{{else}}this definition{{end}}, or choose another definition above.</p><a href="/process-definitions/{{.SelectedDefinitionID}}/execute" class="button button-primary empty-action">Start execution <span aria-hidden="true">→</span></a>{{else}}<p>Choose another process definition or clear the filter to view all executions.</p>{{end}}<a href="/processes/" class="button button-secondary empty-action">View all executions <span aria-hidden="true">→</span></a>{{else}}<h3>No executions yet</h3><p>Open an active process definition and select Start execution.</p><a href="/process-definitions/" class="button button-secondary empty-action">Browse process definitions <span aria-hidden="true">→</span></a>{{end}}</div>
+        {{end}}
+    </div>
+</section>
+{{end}}

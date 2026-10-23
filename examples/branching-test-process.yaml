@@ -1,0 +1,158 @@
+name: Five-step branching example
+description: Prepare, inspect and verify in parallel, combine their summaries, and end.
+
+inputs:
+  working_directory:
+    type: FILE_PATH
+    required: true
+  prompt:
+    type: STRING
+    required: true
+  model:
+    type: STRING
+  reasoning_effort:
+    type: STRING
+
+# Each acquisition counts toward this budget, including passes waiting for a worker.
+reliability:
+  max_retries: 30
+
+steps:
+  prepare:
+    type: AI_CODING_AGENT
+    context:
+      task:
+        type: STRING
+        from: inputs.prompt
+    inputs:
+      working_directory:
+        type: FILE_PATH
+        required: true
+      model:
+        type: STRING
+      reasoning_effort:
+        type: STRING
+      prompt:
+        type: STRING
+        value: |
+          Inspect the repository structure and identify the files relevant to the
+          task in context. Return a concise orientation summary. Do not modify files.
+      output_json:
+        type: JSON_SCHEMA
+        value:
+          type: object
+          properties:
+            summary:
+              type: string
+          required: [summary]
+          additionalProperties: false
+    reliability:
+      timeout: 3m
+      max_retries: 1
+    next: [inspect, verify]
+
+  inspect:
+    type: AI_CODING_AGENT
+    context:
+      preparation:
+        type: STRING
+        from: steps.prepare.output.summary
+    inputs:
+      working_directory:
+        type: FILE_PATH
+        required: true
+      model:
+        type: STRING
+      reasoning_effort:
+        type: STRING
+      prompt:
+        type: STRING
+        from: inputs.prompt
+      output_json:
+        type: JSON_SCHEMA
+        value:
+          type: object
+          properties:
+            summary:
+              type: string
+          required: [summary]
+          additionalProperties: false
+    reliability:
+      timeout: 3m
+      max_retries: 1
+    next: [finish]
+
+  verify:
+    type: AI_CODING_AGENT
+    context:
+      task:
+        type: STRING
+        from: inputs.prompt
+      preparation:
+        type: STRING
+        from: steps.prepare.output.summary
+    inputs:
+      working_directory:
+        type: FILE_PATH
+        required: true
+      model:
+        type: STRING
+      reasoning_effort:
+        type: STRING
+      prompt:
+        type: STRING
+        value: |
+          Independently inspect the repository and check the task in context.
+          Report relevant evidence and any concerns. Do not modify files.
+      output_json:
+        type: JSON_SCHEMA
+        value:
+          type: object
+          properties:
+            summary:
+              type: string
+          required: [summary]
+          additionalProperties: false
+    reliability:
+      timeout: 3m
+      max_retries: 1
+    next: [finish]
+
+  finish:
+    type: AI_CODING_AGENT
+    context:
+      inspection:
+        type: STRING
+        from: steps.inspect.output.summary
+      verification:
+        type: STRING
+        from: steps.verify.output.summary
+    inputs:
+      working_directory:
+        type: FILE_PATH
+        required: true
+      model:
+        type: STRING
+      reasoning_effort:
+        type: STRING
+      prompt:
+        type: STRING
+        value: |
+          Combine the inspection and verification summaries from context into a
+          concise final summary. Report any disagreements. Do not modify files.
+      output_json:
+        type: JSON_SCHEMA
+        value:
+          type: object
+          properties:
+            summary:
+              type: string
+          required: [summary]
+          additionalProperties: false
+    reliability:
+      timeout: 3m
+      max_retries: 1
+    next: [end]
+
+  end:
+    type: TERMINAL

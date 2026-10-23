@@ -1,0 +1,36 @@
+{{define "base"}}<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#0b1c20">
+    <title>{{template "title" .}} · Go Software Factory</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='4' fill='%23e4a17b'/%3E%3Cpath d='M28 10H12V30H28V21H21' fill='none' stroke='%230b1c20' stroke-width='3.5'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    {{template "styles" .}}
+    {{if .LoginPage}}
+    <script src="https://unpkg.com/htmx.org@2.0.3" integrity="sha384-0895/pl2MU10Hqc6jd4RvrthNlDiE9U1tWmX7WRESftEDRosgxNsQG/Ze9YMRzHq" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/htmx-ext-response-targets@2.0.0/response-targets.js"></script>
+    {{end}}
+</head>
+<body {{if .LoginPage}}hx-ext="response-targets"{{end}}>
+    <a href="#main" class="skip-link">Skip to content</a>
+    {{if .LoginPage}}
+    <main id="main" class="login-layout">{{template "content" .}}</main>
+    {{else}}
+    <header class="app-header">
+        <div class="app-header-inner">
+            <a href="/process-definitions/" class="brand" aria-label="Go Software Factory home">{{template "brand" .}}</a>
+            <nav class="app-nav" aria-label="Main navigation">
+                <a href="/process-definitions/" {{if not .ProcessesPage}}aria-current="{{if .Definition}}location{{else if .FormAction}}location{{else}}page{{end}}"{{end}}>Process definitions</a>
+                <a href="/processes/" {{if .ProcessesPage}}aria-current="{{if .Process}}location{{else}}page{{end}}"{{end}}>Processes</a>
+            </nav>
+        </div>
+    </header>
+    <main id="main" class="app-main">{{block "content" .}}{{end}}</main>
+    {{end}}
+</body>
+</html>{{end}}

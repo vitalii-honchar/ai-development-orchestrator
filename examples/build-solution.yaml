@@ -1,0 +1,153 @@
+name: Build a feature or application
+description: Brainstorm, implement, and test a user-described solution with an AI coding agent.
+inputs:
+  working_directory:
+    type: FILE_PATH
+    required: true
+  description:
+    type: STRING
+    required: true
+steps:
+  brainstorm:
+    type: AI_CODING_AGENT
+    context:
+      description:
+        type: STRING
+        from: inputs.description
+    inputs:
+      working_directory:
+        type: FILE_PATH
+        required: true
+      prompt:
+        type: STRING
+        value: |
+          Brainstorm a solution for the feature or application described in the inputs.
+          Inspect the existing project, conventions, architecture, tooling, and tests.
+          Consider practical approaches and choose the simplest one meeting the request.
+          Record reasonable assumptions and proceed without interactive questions.
+          Preserve unrelated changes. Do not commit, push, or publish.
+
+          Create a complete solution plan in docs/plans/solution-plan-<datetime>.md,
+          using a UTC timestamp with subsecond precision. Create the directory if needed.
+          Never replace an existing plan; choose a new filename if there is a collision.
+          Include requirements, assumptions, the chosen approach, files to create or
+          change, ordered implementation tasks, acceptance criteria, and exact
+          verification commands. Do not implement the solution during this stage.
+      output_json:
+        type: JSON_SCHEMA
+        value:
+          type: object
+          properties:
+            summary:
+              type: string
+              description: Concise description of the chosen approach.
+            path_to_plan:
+              type: string
+              description: Absolute path to the complete solution plan created in docs/plans.
+          required: [summary, path_to_plan]
+          additionalProperties: false
+    reliability:
+      timeout: 10m
+      retry_timeout: 1m
+    next: [implement]
+  implement:
+    type: AI_CODING_AGENT
+    context:
+      description:
+        type: STRING
+        from: inputs.description
+      path_to_plan:
+        type: FILE_PATH
+        from: steps.brainstorm.output.path_to_plan
+    inputs:
+      working_directory:
+        type: FILE_PATH
+        required: true
+      prompt:
+        type: STRING
+        value: |
+          Implement the solution described in the inputs. Read the complete file at
+          path_to_plan before making changes. Follow its implementation tasks and
+          acceptance criteria, the user's description, and repository instructions.
+          Record reasonable assumptions and proceed without interactive questions.
+          Preserve unrelated changes. Do not commit, push, or publish.
+
+          Implement the requested feature or application with focused tests and run
+          the relevant checks. Keep changes within the requested scope. If the plan
+          is missing or inconsistent with the description, record the blocker.
+
+          Create docs/plans/implementation-report-<datetime>.md with a unique UTC
+          timestamp. Never overwrite an existing report. Include files changed,
+          commands and outcomes, deviations from the plan, and remaining blockers.
+      output_json:
+        type: JSON_SCHEMA
+        value:
+          type: object
+          properties:
+            summary:
+              type: string
+              description: Concise implementation outcome, including incomplete requirements.
+            path_to_report:
+              type: string
+              description: Absolute path to the complete implementation report created in docs/plans.
+          required: [summary, path_to_report]
+          additionalProperties: false
+    reliability:
+      timeout: 30m
+      retry_timeout: 1m
+    next: [test]
+  test:
+    type: AI_CODING_AGENT
+    context:
+      description:
+        type: STRING
+        from: inputs.description
+      path_to_plan:
+        type: FILE_PATH
+        from: steps.brainstorm.output.path_to_plan
+      path_to_implementation_report:
+        type: FILE_PATH
+        from: steps.implement.output.path_to_report
+    inputs:
+      working_directory:
+        type: FILE_PATH
+        required: true
+      prompt:
+        type: STRING
+        value: |
+          Test the solution described in the inputs. Read the complete files at
+          path_to_plan and path_to_implementation_report. Inspect the actual
+          implementation and verify every acceptance criterion against the description.
+          Proceed without interactive questions. Preserve unrelated changes.
+          Do not commit, push, or publish.
+
+          Run the plan's verification commands and applicable test, lint, and build
+          checks. Add focused tests for uncovered acceptance criteria. Fix defects
+          within the requested solution when practical and rerun affected checks.
+          Do not add unrelated features or weaken tests or architecture rules.
+          Treat any missing artifact or unavailable check as a blocker or limitation.
+          Never claim a check passed without running it and inspecting the result.
+
+          Create docs/plans/test-report-<datetime>.md with a unique UTC timestamp.
+          Never overwrite an existing report. Include an overall PASS, FAIL, or BLOCKED
+          verdict, each criterion's result, commands and outcomes, fixes, and remaining
+          failures or limitations.
+      output_json:
+        type: JSON_SCHEMA
+        value:
+          type: object
+          properties:
+            summary:
+              type: string
+              description: Verification verdict and any remaining failures or limitations.
+            path_to_report:
+              type: string
+              description: Absolute path to the complete test report created in docs/plans.
+          required: [summary, path_to_report]
+          additionalProperties: false
+    reliability:
+      timeout: 15m
+      retry_timeout: 1m
+    next: [done]
+  done:
+    type: TERMINAL

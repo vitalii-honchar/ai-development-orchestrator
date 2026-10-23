@@ -1,0 +1,12 @@
+{{template "base" .}}
+{{define "title"}}Create process definition{{end}}
+{{define "content"}}
+<section aria-labelledby="page-title">
+    <a class="back-link" href="/process-definitions/"><span aria-hidden="true">←</span> Process definitions</a>
+    <div class="page-heading">
+        <div><h1 id="page-title">Create process definition</h1>
+        <p class="page-description">Name each step under <code>steps</code> and connect it to other step names with <code>next</code>. Inputs declare their type and whether they are required.</p></div>
+    </div>
+    {{template "processdefinitions/editor" .}}
+</section>
+{{end}}

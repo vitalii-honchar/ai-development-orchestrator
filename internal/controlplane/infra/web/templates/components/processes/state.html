@@ -1,0 +1,1 @@
+{{define "processes/state"}}<span class="status {{if or (eq . "COMPLETED") (eq . "ACTIVE")}}status-active{{else if eq . "FAILED"}}status-failed{{else}}status-draft{{end}}">{{if eq . "COMPLETED"}}Completed{{else if eq . "FAILED"}}Failed{{else if eq . "PENDING"}}Pending{{else if eq . "IN_PROGRESS"}}In progress{{else}}{{.}}{{end}}</span>{{end}}

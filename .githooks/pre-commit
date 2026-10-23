@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+# Lint exactly what will be committed, including partially staged files.
+staged_tree=$(git write-tree)
+lint_dir=$(mktemp -d "${TMPDIR:-/tmp}/factory-pre-commit.XXXXXX")
+trap 'rm -rf "$lint_dir"' EXIT HUP INT TERM
+git archive "$staged_tree" | tar -x -C "$lint_dir"
+
+cd "$lint_dir"
+make lint
